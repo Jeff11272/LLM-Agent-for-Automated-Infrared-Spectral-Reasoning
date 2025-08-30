@@ -277,6 +277,7 @@ class SpectrumCLS:
                 f"{self.format_eval_prompt(self.test_data)}"
             }
         ]
+        print(".........",initial_messages)
         preds_test, raw_text = self.chat_predict(initial_messages)
         print('raw_model_output:', raw_text)
         print('parsed_preds:', preds_test)

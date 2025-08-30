@@ -16,7 +16,7 @@ class CLS_Dataset:
         labels: list,
         total_samples: int,
         split_ratio: list,
-        random_seed: Optional[int],
+        random_seed: Optional[int] = 3,
     ):
         if random_seed is None:
             random_seed = 3
@@ -254,7 +254,7 @@ class ANO_Dataset:
 
         rng = np.random.RandomState(self.random_seed)
 
-        # 1) Extract total samples from normal class
+        # 1) 从 normal 类抽取总样本
         n_total = min(total_samples, X.shape[1])
         idxs_normal = np.arange(X.shape[1])
         chosen_normal = rng.choice(idxs_normal, n_total, replace=False)
@@ -266,7 +266,7 @@ class ANO_Dataset:
         norm_idxs  = chosen_normal[:n_norm]
         intra_idxs = chosen_normal[n_norm:n_norm + n_intra]
 
-        # inter candidate pool
+        # inter 候选池
         inter_pool = []
         for cls in range(self.n_classes):
             if cls == self.normal_class:
@@ -280,7 +280,7 @@ class ANO_Dataset:
         else:
             inter_idxs = np.array([], dtype=object)
 
-        # 3) Construct entries
+        # 3) 构造条目
         normal_entries = []
         for i in norm_idxs:
             x_vec = X[self.normal_class, i, :]
@@ -318,12 +318,12 @@ class ANO_Dataset:
                 "anomaly_type": "inter"
             })
 
-        # 4) Shuffle within buckets (reproducible)
+        # 4) 桶内打乱（可复现）
         rng.shuffle(normal_entries)
         rng.shuffle(intra_entries)
         rng.shuffle(inter_entries)
 
-        # === Scheme B: Largest Remainder Method allocation (globally exact hit) ===
+        # === 方案B：最大余数法分配配额（全局精确命中） ===
         def lrm_allocate(
             counts: Dict[str, int],
             ratio: float,
@@ -332,10 +332,10 @@ class ANO_Dataset:
         ) -> Dict[str, int]:
             """
             Largest Remainder Method with per-bucket capacity.
-            counts: Total samples in each bucket
-            ratio: Target ratio (e.g., 0.6)
-            global_target: Global desired count (e.g., floor(n_total*0.6))
-            capacity: Available capacity for each bucket (if not provided, equals counts)
+            counts: 每个桶的总样本数
+            ratio: 目标比例（如 0.6）
+            global_target: 全局想要的个数（如 floor(n_total*0.6)）
+            capacity: 每个桶的可用容量（不传则等于 counts）
             """
             keys = list(counts.keys())
             cap = capacity if capacity is not None else counts
@@ -344,20 +344,20 @@ class ANO_Dataset:
             base_unclamped = {k: int(np.floor(shares[k])) for k in keys}
             alloc = {k: min(base_unclamped[k], cap[k]) for k in keys}
 
-            # Remainders (set to -1 if no capacity to prevent further allocation)
+            # 余数（若没容量则设为 -1，防止再分）
             remainders = {
                 k: (shares[k] - base_unclamped[k]) if (cap[k] - alloc[k]) > 0 else -1.0
                 for k in keys
             }
 
-            # Current total & needed slots
+            # 当前总量 & 需要补的名额
             cur = sum(alloc.values())
             need = min(global_target, sum(cap.values()))
             extras = need - cur
 
-            # Allocate one by one in descending order of remainders
+            # 依余数从大到小、逐个补齐
             while extras > 0:
-                # Find the bucket with maximum remainder and available capacity
+                # 找到有剩余容量的最大余数桶
                 k_star = None
                 best_r = -1.0
                 for k in keys:
@@ -365,38 +365,38 @@ class ANO_Dataset:
                         best_r = remainders[k]
                         k_star = k
                 if k_star is None:
-                    break  # No capacity left (theoretically shouldn't happen)
+                    break  # 没容量了（理论上不会发生）
                 alloc[k_star] += 1
                 extras -= 1
-                # If bucket is full, set remainder to -1
+                # 若该桶已满，余数置为 -1
                 if cap[k_star] - alloc[k_star] == 0:
                     remainders[k_star] = -1.0
             return alloc
 
-        # Samples in each bucket
+        # 各桶样本数
         counts = {
             "normal": len(normal_entries),
             "intra":  len(intra_entries),
             "inter":  len(inter_entries),
         }
 
-        # Global target quotas
+        # 全局目标配额
         train_ratio, val_ratio, test_ratio = split_ratio
         g_train = int(n_total * train_ratio)
         g_val   = int(n_total * val_ratio)
-        g_test  = n_total - g_train - g_val  # Ensure the sum equals n_total
+        g_test  = n_total - g_train - g_val  # 保证三者求和为 n_total
 
-        # First allocate Train
+        # 先分配 Train
         train_alloc = lrm_allocate(counts, train_ratio, g_train, capacity=counts)
 
-        # Then allocate Val (capacity = counts - train_alloc)
+        # 再分配 Val（容量 = counts - train_alloc）
         cap_val = {k: counts[k] - train_alloc[k] for k in counts}
         val_alloc = lrm_allocate(counts, val_ratio, g_val, capacity=cap_val)
 
-        # Test fills remaining capacity
+        # Test 用剩余容量补齐
         test_alloc = {k: counts[k] - train_alloc[k] - val_alloc[k] for k in counts}
 
-        # 5) Slice by allocated counts
+        # 5) 按分配数量切片
         def cut(entries: List[dict], n_train: int, n_val: int):
             train = entries[:n_train]
             val = entries[n_train:n_train + n_val]
@@ -407,7 +407,7 @@ class ANO_Dataset:
         t_intra, v_intra, s_intra = cut(intra_entries, train_alloc["intra"], val_alloc["intra"])
         t_inter, v_inter, s_inter = cut(inter_entries, train_alloc["inter"], val_alloc["inter"])
 
-        # 6) Merge + global shuffle
+        # 6) 合并 + 全局打乱
         self.train_data = t_norm + t_intra + t_inter
         self.val_data   = v_norm + v_intra + v_inter
         self.test_data  = s_norm + s_intra + s_inter
@@ -418,7 +418,7 @@ class ANO_Dataset:
 
         self.train_data=self.train_data
         
-        # 7) Boolean labels for evaluation
+        # 7) 评估用布尔标签
         def labels_to_bool(list_of_entries: List[dict]) -> List[bool]:
             out = []
             for d in list_of_entries:
@@ -448,3 +448,4 @@ class ANO_Dataset:
         print(f"Train: {len(self.train_data)} ({tn} normal, {ti} intra, {te} inter)")
         print(f"Val:   {len(self.val_data)} ({vn} normal, {vi} intra, {ve} inter)")
         print(f"Test:  {len(self.test_data)} ({sn} normal, {si} inter, {se} inter)")
+
