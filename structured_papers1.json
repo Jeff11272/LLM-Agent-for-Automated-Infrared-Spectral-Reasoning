@@ -11,6 +11,17 @@
     "best_machine_learning_method": "Resnet-50"
   },
   {
+    "paper_url": "https://nirpyresearch.com/classification-nir-spectra-principal-component-analysis-python/",
+    "paper_name": "Milk Classification of NIR spectra using Principal Component Analysis in Python",
+    "research_object": "milk",
+    "preprocessing_method": "SG",
+    "best_preprocessing_method": "SG",
+    "feature_extracting_method": "PCA",
+    "best_feature_extracting_method": "PCA",
+    "machine_learning_method": "SVM",
+    "best_machine_learning_method": "SVM"
+  },
+  {
     "paper_url": "Papers\\md\\1-s2.0-S0023643824007989-main.md",
     "paper_name": "Identification and sorting of impurities in tea using spectral vision",
     "research_object": "Puer tea and impurities",
@@ -643,8 +654,8 @@
     "research_object": "Pericarpium Citri Reticulatae (Xinhui Chenpi)",
     "preprocessing_method": "Savitzky–Golay smoothing, SNV, first derivative, second derivative",
     "best_preprocessing_method": "SNV",
-    "feature_extracting_method": "Gray-level co-occurrence matrix (GLCM) for image features, average spectrum for spectral features",
-    "best_feature_extracting_method": "GLCM (dissimilarity, homogeneity, correlation, ASM) and average spectrum",
+    "feature_extracting_method": "PCA",
+    "best_feature_extracting_method": "PCA",
     "machine_learning_method": "Support Vector Machine (SVM), K-Nearest Neighbor (KNN), Random Forest (RF), Neural Network (NN)",
     "best_machine_learning_method": "Random Forest (RF)"
   },
@@ -1340,5 +1351,71 @@
     "best_feature_extracting_method": "absorbance curve",
     "machine_learning_method": "decision trees, linear discriminant analysis (LDA), quadratic discriminant analysis (QDA), support vector machines (SVM), closer neighbor classifiers, set classifiers, naive Bayesian classifiers",
     "best_machine_learning_method": "Fine Gaussian SVM model"
+  },
+  {
+    "paper_url": "https://www.sciencedirect.com/science/article/pii/S0169743921000757?utm_source=chatgpt.com",
+    "paper_name": "PLS regression algorithms in the presence of nonlinearity",
+    "research_object": "meat sample",
+    "preprocessing_method": "",
+    "best_preprocessing_method": "",
+    "feature_extracting_method": "Partial_Least_Squares",
+    "best_feature_extracting_method": "Partial_Least_Squares",
+    "machine_learning_method": "",
+    "best_machine_learning_method": ""
+  },
+  {
+    "paper_url": "https://www.sciencedirect.com/science/article/pii/S0003267008018205",
+    "paper_name": "Support vector regression for functional data in multivariate calibration problems",
+    "research_object": "meat sample",
+    "preprocessing_method": "standard_normal_variate",
+    "best_preprocessing_method": "standard_normal_variate",
+    "feature_extracting_method": "Partial_Least_Squares",
+    "best_feature_extracting_method": "Partial_Least_Squares",
+    "machine_learning_method": "",
+    "best_machine_learning_method": ""
+  },
+  {
+    "paper_url": "https://www.sciencedirect.com/science/article/pii/S2590157523001086",
+    "paper_name": "Determination of corn protein content using near-infrared spectroscopy combined with A-CARS-PLS",
+    "research_object": "corn protein content",
+    "preprocessing_method": "standard_normal_variate",
+    "best_preprocessing_method": "standard_normal_variate",
+    "feature_extracting_method": "Partial_Least_Squares",
+    "best_feature_extracting_method": "Partial_Least_Squares",
+    "machine_learning_method": "",
+    "best_machine_learning_method": ""
+  },
+  {
+    "paper_url": "https://www.mdpi.com/2077-0472/12/11/1804",
+    "paper_name": "Consensual Regression of Lasso-Sparse PLS models for Near-Infrared Spectra of Food",
+    "research_object": "corn protein content",
+    "preprocessing_method": "standard_normal_variate",
+    "best_preprocessing_method": "standard_normal_variate",
+    "feature_extracting_method": "Partial_Least_Squares",
+    "best_feature_extracting_method": "Partial_Least_Squares",
+    "machine_learning_method": "",
+    "best_machine_learning_method": ""
+  },
+  {
+    "paper_url": "https://www.sciencedirect.com/science/article/pii/S0731708520315703",
+    "paper_name": "Improved prediction of tablet properties with near-infrared spectroscopy by a fusion of scatter correction techniques",
+    "research_object": "the Active Ingredient in Tablets",
+    "preprocessing_method": "standard_normal_variate",
+    "best_preprocessing_method": "standard_normal_variate",
+    "feature_extracting_method": "pca_feature_extraction",
+    "best_feature_extracting_method": "pca_feature_extraction",
+    "machine_learning_method": "",
+    "best_machine_learning_method": ""
+  },
+  {
+    "paper_url": "https://eigenvector.com/whitepapers/Active_in_tablets.pdf",
+    "paper_name": "Development of an NIR Method for Determining the Active Ingredient in Tablets",
+    "research_object": "the Active Ingredient in Tablets",
+    "preprocessing_method": "standard_normal_variate",
+    "best_preprocessing_method": "standard_normal_variate",
+    "feature_extracting_method": "Partial_Least_Squares",
+    "best_feature_extracting_method": "Partial_Least_Squares",
+    "machine_learning_method": "",
+    "best_machine_learning_method": ""
   }
 ]

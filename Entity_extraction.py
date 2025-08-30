@@ -1,7 +1,7 @@
 import os
 from openai import OpenAI
 import json
-def extract_entities_and_task(input_text: str) -> dict:
+def extract_entities_and_task(input_text: str, api_key: str, base_url: str, model_name) -> dict:
     """
     Uses an LLM to extract both the research object entity and the task type
     (one of: 'classification', 'regression', 'anomaly detection') from the user's question.
@@ -12,8 +12,8 @@ def extract_entities_and_task(input_text: str) -> dict:
             - "task_type": str  # one of "classification", "regression", "anomaly detection"
     """
     client = OpenAI(
-        api_key="...",
-        base_url="...",
+        api_key= api_key,
+        base_url= base_url,
     )
 
     SYSTEM_PROMPT = """
@@ -36,13 +36,14 @@ Example:
 Please analyze the following question and extract:
 1. The research object entity.
 2. Which task type it is (classification, regression, or anomaly detection).
+3、ignore the words 'spectral data' or 'spectral'.
 
 Question:
 \"\"\"{input_text}\"\"\"
 """
 
     response = client.chat.completions.create(
-        model="qwen-plus",
+        model=model_name,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user",   "content": user_prompt},

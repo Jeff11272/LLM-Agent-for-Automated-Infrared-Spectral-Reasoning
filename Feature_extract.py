@@ -1,3 +1,24 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+spectral_feature_extraction.py
+
+Common spectral feature extraction methods. Input data format: (n_samples, n_pixels, n_bands).
+Each function extracts features from each pixel spectrum (length = n_bands) for every sample.
+
+Functions included:
+    1. PCA feature extraction (dimensionality reduction)
+    2. NMF feature extraction (dimensionality reduction)
+    3. Continuous wavelet transform (CWT) coefficient extraction
+    4. Spectral derivatives (first and second order)
+    5. Peak feature extraction (peak detection)
+    6. Statistical features (mean, variance, skewness, kurtosis)
+    7. Lambert-Pearson feature extraction (based on Lambert-Beer law and Pearson correlation)
+
+Author:
+Date:
+"""
+
 import numpy as np
 from sklearn.decomposition import PCA, NMF
 import pywt
@@ -5,7 +26,7 @@ from scipy.signal import find_peaks
 from scipy.stats import skew, kurtosis, pearsonr
 
 # ======================
-# 特征提取函数
+# Feature extraction functions
 # ======================
 
 def pca_feature_extraction(
@@ -13,8 +34,8 @@ def pca_feature_extraction(
     n_components: int = 5
 ) -> np.ndarray:
     """
-    对输入数据 (n_samples, n_pixels, n_bands) 中的所有光谱做 PCA 降维。
-    返回形状 (n_samples, n_pixels, n_components)。
+    Apply PCA dimensionality reduction to all spectra in input data (n_samples, n_pixels, n_bands).
+    Returns shape (n_samples, n_pixels, n_components).
     """
     n_samples, n_pixels, n_bands = data.shape
     flat_data = data.reshape((-1, n_bands))
@@ -32,7 +53,7 @@ def nmf_feature_extraction(
     max_iter: int = 200
 ) -> np.ndarray:
     """
-    对输入数据做 NMF 降维，返回形状 (n_samples, n_pixels, n_components)。
+    Apply NMF dimensionality reduction to input data. Returns shape (n_samples, n_pixels, n_components).
     """
     n_samples, n_pixels, n_bands = data.shape
     flat_data = data.reshape((-1, n_bands))
@@ -49,8 +70,8 @@ def cwt_feature_extraction(
     scales: np.ndarray = np.arange(1, 6)
 ) -> np.ndarray:
     """
-    对输入数据做连续小波变换 (CWT)，提取每个尺度最大绝对系数。
-    返回形状 (n_samples, n_pixels, n_scales)。
+    Apply continuous wavelet transform (CWT) to input data, extract max absolute coefficient for each scale.
+    Returns shape (n_samples, n_pixels, n_scales).
     """
     n_samples, n_pixels, n_bands = data.shape
     n_scales = len(scales)
@@ -70,10 +91,10 @@ def spectral_derivative(
     order: int = 1
 ) -> np.ndarray:
     """
-    对输入数据计算一阶或二阶导数，返回形状 (n_samples, n_pixels, n_bands)。
+    Compute first or second order derivative for input data. Returns shape (n_samples, n_pixels, n_bands).
     """
     if order not in [1, 2]:
-        raise ValueError("order 只能为 1 或 2。")
+        raise ValueError("order must be 1 or 2.")
 
     n_samples, n_pixels, n_bands = data.shape
     deriv = np.zeros_like(data)
@@ -95,7 +116,7 @@ def peak_feature_extraction(
     distance: int = None
 ) -> np.ndarray:
     """
-    对输入数据进行峰值检测，提取峰高与峰位，返回 (n_samples, n_pixels, 2*n_peaks)。
+    Detect peaks in input data, extract peak heights and positions. Returns (n_samples, n_pixels, 2*n_peaks).
     """
     n_samples, n_pixels, n_bands = data.shape
     features = np.zeros((n_samples, n_pixels, 2 * n_peaks), dtype=float)
@@ -120,7 +141,7 @@ def statistical_feature_extraction(
     data: np.ndarray
 ) -> np.ndarray:
     """
-    计算统计特征：均值、方差、偏度、峰度，返回 (n_samples, n_pixels, 4)。
+    Compute statistical features: mean, variance, skewness, kurtosis. Returns (n_samples, n_pixels, 4).
     """
     n_samples, n_pixels, _ = data.shape
     features = np.zeros((n_samples, n_pixels, 4), dtype=float)
@@ -136,45 +157,66 @@ def statistical_feature_extraction(
     return features
 
 # ======================
-# 新增：Lambert-Pearson 特征提取
+# Lambert-Pearson feature extraction
 # ======================
 def lambert_pearson_feature_extraction(
     data: np.ndarray,
     target: np.ndarray,
     threshold: float = 0.8,
-    top_k: int = 3
+    top_k: int = 2
 ) -> np.ndarray:
     """
-    将原始强度比值 I0/Isample 转为吸光度，并基于 Pearson 相关系数筛选波段。
-    支持按阈值或前 top_k 个绝对相关系数最高的波段提取特征。
+    Convert raw intensity ratio I0/Isample to absorbance, then select bands by Pearson correlation.
+    Supports selection by threshold or top_k highest absolute correlations.
 
-    参数:
-        data: 原始强度比值，shape (n_samples, n_pixels, n_bands)
-        target: 浓度或标签，shape (n_samples, n_pixels) 或扁平 (n_samples*n_pixels,)
-        threshold: Pearson 相关系数阈值（当 top_k=None 时使用）
-        top_k: 若指定，则选取绝对相关系数最高的 top_k 个波段特征
-    返回:
-        selected: 筛选后特征，shape (n_samples, n_pixels, n_selected_bands)
+    Args:
+        data: raw intensity ratio, shape (n_samples, n_pixels, n_bands)
+        target: concentration or label, shape (n_samples, n_pixels) or flat (n_samples*n_pixels,)
+        threshold: Pearson correlation threshold (used if top_k=None)
+        top_k: if specified, select top_k bands with highest absolute correlation
+    Returns:
+        selected: selected features, shape (n_samples, n_pixels, n_selected_bands)
     """
-    # 1. 吸光度转换：A = log10(data)
+    # 1. Absorbance conversion: A = log10(data)
     with np.errstate(divide='ignore', invalid='ignore'):
         absorbance = np.log10(data)
     absorbance = np.nan_to_num(absorbance)
 
-    # 2. 扁平化计算相关系数
+    # 2. Flatten and compute correlation
     n_samples, n_pixels, n_bands = absorbance.shape
     flat = absorbance.reshape(-1, n_bands)
     flat_target = target.reshape(-1)
     corrs = np.array([pearsonr(flat[:, i], flat_target)[0] for i in range(n_bands)])
 
-    # 3. 根据 top_k 或 threshold 筛选
+    # 3. Select by top_k or threshold
     if top_k is not None:
         idx_sorted = np.argsort(-np.abs(corrs))
         selected_idx = idx_sorted[:top_k]
     else:
         selected_idx = np.where(np.abs(corrs) >= threshold)[0]
 
-    # 4. 重构特征
+    # 4. Reconstruct features
     selected_flat = flat[:, selected_idx]
     selected = selected_flat.reshape(n_samples, n_pixels, -1)
     return selected
+
+from sklearn.cross_decomposition import PLSRegression
+def Partial_Least_Squares(X, Y, n_components=4):
+    """
+    使用偏最小二乘（PLS）进行特征提取。
+
+    参数:
+        X (np.ndarray): 特征数据，形状为 (样本数, 特征数)。
+        Y (np.ndarray): 目标变量，形状为 (样本数,) 或 (样本数, 目标变量数)。
+
+    返回:
+        np.ndarray: 提取的特征，形状为 (样本数, n_components)。
+    """
+    # 初始化 PLS 模型
+    pls = PLSRegression(n_components=n_components)
+
+    # 使用 PLS 提取特征
+    pls.fit(X, Y)  # 这里的 fit 是为了计算 PLS 的投影矩阵
+    X_transformed = pls.transform(X)  # 提取降维后的特征
+
+    return X_transformed

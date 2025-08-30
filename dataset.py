@@ -1,39 +1,57 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+cls_dataset.py
+
+Unified dataset interface: input labels, total_samples, split_ratio are provided externally.
+"""
 
 import numpy as np
+from typing import List, Any, Tuple,Dict,Optional
 
 class CLS_Dataset:
     def __init__(
         self,
         feature: np.ndarray,
-        label_type: str,
-        n_classes: int = 3,
-        n_train_per_class: int = 3,
-        n_val_per_class: int = 2,
-        n_test_per_class: int = 2,
-        random_seed: int = 4
+        labels: list,
+        total_samples: int,
+        split_ratio: list,
+        random_seed: Optional[int],
     ):
+        if random_seed is None:
+            random_seed = 3
         """
-        Initialize dataset splitting.
-
         Parameters:
-        - X_pca: numpy array of shape (n_classes, total_per_class, n_features)
-        - label_type: one of ['Ink', 'Chenpi', 'CN_medicine', 'Puer_tea']
-        - n_classes, n_train_per_class, n_val_per_class, n_test_per_class: split sizes
+        - feature: numpy array of shape (n_classes, n_samples_per_class, n_features)
+        - labels: list of class labels
+        - total_samples: total number of samples for all classes
+        - split_ratio: [train_ratio, val_ratio, test_ratio], sum to 1
         - random_seed: int for reproducibility
         """
-        self.X_pca = feature
-        self.label_type = label_type
-        self.n_classes = n_classes
-        self.n_train = n_train_per_class
-        self.n_val = n_val_per_class
-        self.n_test = n_test_per_class
-        self.total_per_class = n_train_per_class + n_val_per_class + n_test_per_class
+        self.labels = labels
+        self.n_classes = len(labels)
         self.random_seed = random_seed
+        # Randomly assign sample count for each class
+        base_num = total_samples // self.n_classes
+        remain = total_samples % self.n_classes
+        np.random.seed(self.random_seed)
+        class_counts = [base_num] * self.n_classes
+        if remain > 0:
+            extra_idx = np.random.choice(self.n_classes, remain, replace=False)
+            for idx in extra_idx:
+                class_counts[idx] += 1
+        self.class_counts = class_counts  # samples per class
 
-        # Prepare label lists based on label_type
-        self.labels = self._generate_labels(label_type)
+        # feature shape: (n_classes, n_samples_per_class, n_features)
+        self.X_pca = feature
 
-        # Build dataset
+        # Calculate split counts for all samples
+        ratios = np.array(split_ratio)
+        assert np.isclose(ratios.sum(), 1.0), "split_ratio must sum to 1"
+        self.n_train = int(total_samples * ratios[0])
+        self.n_val   = int(total_samples * ratios[1])
+        self.n_test  = total_samples - self.n_train - self.n_val
+
         self.dataset = []
         self.true_labels_val = []
         self.true_labels_test = []
@@ -41,46 +59,61 @@ class CLS_Dataset:
         self._build_dataset()
         self._split_data()
 
-    def _generate_labels(self, label_type):
-        if label_type == 'Ink':
-            return ["red1", "red2", "red3",
-                    "red4", "red5", "red6",
-                    "red7", "red8", "red9",
-                    "red10", "red11", "red12",]
-        elif label_type == 'Chenpi':
-            return ["1", "2", "3",
-                    "4", "5", "6",
-                    "7", "8",]
-        elif label_type == 'CN_medicine':
-            return ["山银花", "金银花", "山银花金银花混合物"]
-        elif label_type == 'Puer_tea':
-            return ["1", "2", "3",'4','5', '6','7', '8', '9','10','11','12','13','14']
-        else:
-            raise ValueError(f"Unknown label_type: {label_type}")
-
     def _build_dataset(self):
-        for cls_id in range(self.n_classes):
+        np.random.seed(self.random_seed)
+        all_items = []
+        # Collect all samples with label info
+        for cls_id, count in enumerate(self.class_counts):
             label = self.labels[cls_id]
-            for i in range(self.total_per_class):
-                idx = cls_id * self.total_per_class + i
-                if i < self.n_train:
-                    split = "train"
-                elif i < self.n_train + self.n_val:
-                    split = "val"
-                else:
-                    split = "test"
-                name = f"{label}_{split}_{i}"
+            available_idx = np.arange(self.X_pca.shape[1])
+            chosen_idx = np.random.choice(available_idx, count, replace=False)
+            for i, feat_idx in enumerate(chosen_idx):
                 item = {
-                    "name": name,
-                    "x": self.X_pca[cls_id][i].tolist(),
+                    "name": f"{label}_{i}",
+                    "x": self.X_pca[cls_id][feat_idx].tolist(),
                     "label": label,
-                    "split": split
                 }
-                self.dataset.append(item)
-                if split == "val":
-                    self.true_labels_val.append(label)
-                elif split == "test":
-                    self.true_labels_test.append(label)
+                all_items.append(item)
+        # Shuffle all samples
+        np.random.shuffle(all_items)
+
+        # Split by class to ensure every split contains every class
+        train_data, val_data, test_data = [], [], []
+        class_items = {label: [] for label in self.labels}
+        for item in all_items:
+            class_items[item["label"]].append(item)
+
+        # Calculate per-class split counts
+        train_per_class = self.n_train // self.n_classes
+        val_per_class = self.n_val // self.n_classes
+        test_per_class = self.n_test // self.n_classes
+
+        # If not divisible, randomly assign the remainder
+        remain_train = self.n_train - train_per_class * self.n_classes
+        remain_val = self.n_val - val_per_class * self.n_classes
+        remain_test = self.n_test - test_per_class * self.n_classes
+
+        np.random.seed(self.random_seed)
+        train_extra = np.random.choice(self.labels, remain_train, replace=False) if remain_train > 0 else []
+        val_extra = np.random.choice(self.labels, remain_val, replace=False) if remain_val > 0 else []
+        test_extra = np.random.choice(self.labels, remain_test, replace=False) if remain_test > 0 else []
+
+        for label in self.labels:
+            items = class_items[label]
+            np.random.shuffle(items)
+            train_count = train_per_class + (1 if label in train_extra else 0)
+            val_count = val_per_class + (1 if label in val_extra else 0)
+            test_count = test_per_class + (1 if label in test_extra else 0)
+            train_data.extend([dict(**item, split="train") for item in items[:train_count]])
+            val_data.extend([dict(**item, split="val") for item in items[train_count:train_count+val_count]])
+            test_data.extend([dict(**item, split="test") for item in items[train_count+val_count:]])
+
+        # Combine all splits
+        self.dataset = train_data + val_data + test_data
+
+        # Store true labels for val/test
+        self.true_labels_val = [item["label"] for item in val_data]
+        self.true_labels_test = [item["label"] for item in test_data]
 
     def _split_data(self):
         # Separate by split
@@ -105,43 +138,39 @@ class CLS_Dataset:
         print(f"Validation samples: {len(self.val_data)}, labels: {self.true_labels_val}")
         print(f"Test samples: {len(self.test_data)}, labels: {self.true_labels_test}")
 
-
 class REG_Dataset:
     def __init__(
         self,
         X: np.ndarray,
         Y: np.ndarray,
-        n_train: int = 20,
-        n_val: int = 5,
-        n_test: int = 5,
-        random_seed: int = 42
+        total_samples: int,
+        split_ratio: list,
+        random_seed: Optional[int] = 5,
     ):
+        if random_seed is None:
+            random_seed = 5
         """
-        Initialize regression dataset splitting for a single material class.
-
         Parameters:
         - X: numpy array of shape (1, total_samples, n_features) or (total_samples, n_features)
         - Y: numpy array of shape (1, total_samples, 1) or (total_samples,) or (total_samples, 1)
-        - n_train: number of training samples
-        - n_val: number of validation samples
-        - n_test: number of test samples
+        - total_samples: number of samples
+        - split_ratio: [train_ratio, val_ratio, test_ratio], sum to 1
         - random_seed: for reproducible shuffling
         """
         # Process X: remove leading class dimension if present
         if X.ndim == 3:
             assert X.shape[0] == 1, "X first dimension must be 1 for single-class data"
-            X_proc = X[0]  # shape: (total_samples, n_features)
+            X_proc = X[0]
         else:
             X_proc = X
         assert X_proc.ndim == 2, f"X must be 2D after squeezing, but got shape {X_proc.shape}"
 
-        # Process Y: expecting shape (1, total_samples, 1)
+        # Process Y
         if Y.ndim == 3:
             assert Y.shape[0] == 1 and Y.shape[2] == 1, \
                 "Y must have shape (1, samples, 1) for single-class data"
             Y_flat = Y[0, :, 0]
         else:
-            # Remove singleton dimension in second axis if present
             Y_flat = Y.squeeze()
         assert Y_flat.ndim == 1, f"Y must be 1D after squeezing, but got shape {Y_flat.shape}"
 
@@ -149,15 +178,17 @@ class REG_Dataset:
         self.Y = Y_flat
         self.total_samples, self.n_features = self.X.shape
 
-        # Ensure enough samples
-        needed = n_train + n_val + n_test
-        assert needed <= self.total_samples, (
-            f"Not enough samples: needed {needed} but only {self.total_samples} available"
+        # Calculate split counts
+        ratios = np.array(split_ratio)
+        assert np.isclose(ratios.sum(), 1.0), "split_ratio must sum to 1"
+        self.n_train = int(total_samples * ratios[0])
+        self.n_val   = int(total_samples * ratios[1])
+        self.n_test  = total_samples - self.n_train - self.n_val
+
+        assert self.n_train + self.n_val + self.n_test <= self.total_samples, (
+            f"Not enough samples: needed {self.n_train + self.n_val + self.n_test} but only {self.total_samples} available"
         )
 
-        self.n_train = n_train
-        self.n_val   = n_val
-        self.n_test  = n_test
         self.random_seed = random_seed
 
         # Shuffle and split indices
@@ -197,125 +228,223 @@ class REG_Dataset:
         print(f"Test samples: {len(self.test_data)}, true y: {self.y_test_true}")
 
 
+
 class ANO_Dataset:
     def __init__(
         self,
         X: np.ndarray,
+        labels: List[Any],
+        total_samples: int,
+        split_ratio: List[float],
         normal_class: int = 0,
-        n_train_norm: int = 20,
-        n_val_norm:   int = 5,
-        n_test_norm:  int = 5,
-        n_inter_anom: int = 10,
-        n_intra_anom: int = 5,
-        noise_std:    float = 0.01,
-        random_seed:  int = 42
+        noise_std: float = 0.05,
+        random_seed: Optional[int] = 42,
     ):
-        assert X.ndim == 3, "X must be 3D array"
+        if random_seed is None:
+            random_seed = 42
+        assert X.ndim == 3, "X must be a 3D array (n_classes, n_samples, n_features)"
+        assert len(split_ratio) == 3 and abs(sum(split_ratio) - 1.0) < 1e-6, "split_ratio must sum to 1"
+
         self.X = X
-        self.n_classes, self.n_samples, self.n_features = X.shape
-        assert 0 <= normal_class < self.n_classes, "normal_class out of range"
+        self.labels = labels
+        self.n_classes = len(labels)
+        self.normal_class = normal_class
+        self.noise_std = noise_std
+        self.random_seed = random_seed
 
-        # 参数
-        self.normal_class  = normal_class
-        self.n_train_norm  = n_train_norm
-        self.n_val_norm    = n_val_norm
-        self.n_test_norm   = n_test_norm
-        self.n_inter_anom  = n_inter_anom
-        self.n_intra_anom  = n_intra_anom
-        self.noise_std     = noise_std
-        self.random_seed   = random_seed
+        rng = np.random.RandomState(self.random_seed)
 
-        np.random.seed(self.random_seed)
-        self._sample_indices()
-        self._assemble_splits()
+        # 1) Extract total samples from normal class
+        n_total = min(total_samples, X.shape[1])
+        idxs_normal = np.arange(X.shape[1])
+        chosen_normal = rng.choice(idxs_normal, n_total, replace=False)
 
-    def _sample_indices(self):
-        idxs = np.arange(self.n_samples)
+        n_norm  = int(n_total * 0.75)
+        n_intra = int(n_total * 0.25)
+        n_inter = n_intra*2
 
-        # 类内异常（抽取正常类样本）
-        self.intra_idxs = list(
-            np.random.choice(idxs, self.n_intra_anom, replace=False)
-        )
-        # 正常池
-        self.normal_pool = list(np.setdiff1d(idxs, self.intra_idxs))
-        needed_norm = self.n_train_norm + self.n_val_norm + self.n_test_norm
-        assert needed_norm <= len(self.normal_pool), (
-            f"Need {needed_norm} normals but only {len(self.normal_pool)} available"
-        )
-        sel_norm = list(np.random.choice(self.normal_pool, needed_norm, replace=False))
-        perm = np.random.permutation(len(sel_norm))
-        self.train_norm = [sel_norm[i] for i in perm[:self.n_train_norm]]
-        self.val_norm   = [sel_norm[i] for i in perm[self.n_train_norm:
-                                                     self.n_train_norm+self.n_val_norm]]
-        self.test_norm  = [sel_norm[i] for i in perm[self.n_train_norm+self.n_val_norm:]]
+        norm_idxs  = chosen_normal[:n_norm]
+        intra_idxs = chosen_normal[n_norm:n_norm + n_intra]
 
-        # 类间异常（来自其他类别）
-        self.inter_idxs = []
-        per_cls = int(np.ceil(self.n_inter_anom / (self.n_classes - 1)))
-        total = 0
+        # inter candidate pool
+        inter_pool = []
         for cls in range(self.n_classes):
             if cls == self.normal_class:
                 continue
-            avail = np.arange(self.n_samples)
-            pick = min(per_cls, self.n_inter_anom - total)
-            chosen = np.random.choice(avail, pick, replace=False)
-            self.inter_idxs += [(cls, int(i)) for i in chosen]
-            total = len(self.inter_idxs)
-            if total >= self.n_inter_anom:
-                break
+            for i in range(X.shape[1]):
+                inter_pool.append((cls, i))
+        inter_pool = np.array(inter_pool, dtype=object)
+        if n_inter > 0:
+            chosen_inter = rng.choice(len(inter_pool), n_inter, replace=False)
+            inter_idxs = inter_pool[chosen_inter]
+        else:
+            inter_idxs = np.array([], dtype=object)
 
-    def _make_entries(self, idxs, anomaly=False):
-        entries = []
-        for item in idxs:
-            if isinstance(item, tuple):
-                cls, i = item
-            else:
-                cls, i = self.normal_class, item
-            # 获取原始光谱向量
-            x_vec = self.X[cls, i, :]
-            # 对类内异常注入噪声
-            if anomaly and cls == self.normal_class:
-                x_vec = x_vec + np.random.normal(0, self.noise_std, size=x_vec.shape)
-            entries.append({
-                "name":       f"class{cls}_idx{i}_{'anom' if anomaly else 'norm'}",
-                "x":          x_vec.tolist(),
-                "label":      anomaly,
-                "class_id":   cls,
-                "sample_idx": i
+        # 3) Construct entries
+        normal_entries = []
+        for i in norm_idxs:
+            x_vec = X[self.normal_class, i, :]
+            normal_entries.append({
+                "name": f"class{self.normal_class}_idx{i}_normal",
+                "x": x_vec.tolist(),
+                "label": "false",
+                "class_id": int(self.normal_class),
+                "sample_idx": int(i),
+                "anomaly_type": "normal"
             })
-        return entries
 
-    def _assemble_splits(self):
-        # 训练集：仅正常样本
-        self.train_data = self._make_entries(self.train_norm, anomaly=False)
+        intra_entries = []
+        for i in intra_idxs:
+            x_vec = X[self.normal_class, i, :] + rng.normal(0, self.noise_std, size=X.shape[2])
+            intra_entries.append({
+                "name": f"class{self.normal_class}_idx{i}_intra",
+                "x": x_vec.tolist(),
+                "label": "true",
+                "class_id": int(self.normal_class),
+                "sample_idx": int(i),
+                "anomaly_type": "intra"
+            })
 
-        # 验证集：正常 + 半数异常
-        half_intra = self.intra_idxs[:self.n_intra_anom // 2]
-        half_inter = self.inter_idxs[:len(self.inter_idxs) // 2]
-        self.val_data = (
-            self._make_entries(self.val_norm, False)
-            + self._make_entries(half_intra, True)
-            + self._make_entries(half_inter, True)
-        )
-        self.y_val = [d["label"] for d in self.val_data]
+        inter_entries = []
+        for pair in inter_idxs:
+            cls = int(pair[0]); i = int(pair[1])
+            x_vec = X[cls, i, :]
+            inter_entries.append({
+                "name": f"class{cls}_idx{i}_inter",
+                "x": x_vec.tolist(),
+                "label": "true",
+                "class_id": int(cls),
+                "sample_idx": int(i),
+                "anomaly_type": "inter"
+            })
 
-        # 测试集：正常 + 剩余异常
-        rem_intra = self.intra_idxs[self.n_intra_anom // 2:]
-        rem_inter = self.inter_idxs[len(self.inter_idxs) // 2:]
-        self.test_data = (
-            self._make_entries(self.test_norm, False)
-            + self._make_entries(rem_intra, True)
-            + self._make_entries(rem_inter, True)
-        )
-        self.y_test = [d["label"] for d in self.test_data]
+        # 4) Shuffle within buckets (reproducible)
+        rng.shuffle(normal_entries)
+        rng.shuffle(intra_entries)
+        rng.shuffle(inter_entries)
+
+        # === Scheme B: Largest Remainder Method allocation (globally exact hit) ===
+        def lrm_allocate(
+            counts: Dict[str, int],
+            ratio: float,
+            global_target: int,
+            capacity: Dict[str, int] = None
+        ) -> Dict[str, int]:
+            """
+            Largest Remainder Method with per-bucket capacity.
+            counts: Total samples in each bucket
+            ratio: Target ratio (e.g., 0.6)
+            global_target: Global desired count (e.g., floor(n_total*0.6))
+            capacity: Available capacity for each bucket (if not provided, equals counts)
+            """
+            keys = list(counts.keys())
+            cap = capacity if capacity is not None else counts
+
+            shares = {k: counts[k] * ratio for k in keys}
+            base_unclamped = {k: int(np.floor(shares[k])) for k in keys}
+            alloc = {k: min(base_unclamped[k], cap[k]) for k in keys}
+
+            # Remainders (set to -1 if no capacity to prevent further allocation)
+            remainders = {
+                k: (shares[k] - base_unclamped[k]) if (cap[k] - alloc[k]) > 0 else -1.0
+                for k in keys
+            }
+
+            # Current total & needed slots
+            cur = sum(alloc.values())
+            need = min(global_target, sum(cap.values()))
+            extras = need - cur
+
+            # Allocate one by one in descending order of remainders
+            while extras > 0:
+                # Find the bucket with maximum remainder and available capacity
+                k_star = None
+                best_r = -1.0
+                for k in keys:
+                    if (cap[k] - alloc[k]) > 0 and remainders[k] > best_r:
+                        best_r = remainders[k]
+                        k_star = k
+                if k_star is None:
+                    break  # No capacity left (theoretically shouldn't happen)
+                alloc[k_star] += 1
+                extras -= 1
+                # If bucket is full, set remainder to -1
+                if cap[k_star] - alloc[k_star] == 0:
+                    remainders[k_star] = -1.0
+            return alloc
+
+        # Samples in each bucket
+        counts = {
+            "normal": len(normal_entries),
+            "intra":  len(intra_entries),
+            "inter":  len(inter_entries),
+        }
+
+        # Global target quotas
+        train_ratio, val_ratio, test_ratio = split_ratio
+        g_train = int(n_total * train_ratio)
+        g_val   = int(n_total * val_ratio)
+        g_test  = n_total - g_train - g_val  # Ensure the sum equals n_total
+
+        # First allocate Train
+        train_alloc = lrm_allocate(counts, train_ratio, g_train, capacity=counts)
+
+        # Then allocate Val (capacity = counts - train_alloc)
+        cap_val = {k: counts[k] - train_alloc[k] for k in counts}
+        val_alloc = lrm_allocate(counts, val_ratio, g_val, capacity=cap_val)
+
+        # Test fills remaining capacity
+        test_alloc = {k: counts[k] - train_alloc[k] - val_alloc[k] for k in counts}
+
+        # 5) Slice by allocated counts
+        def cut(entries: List[dict], n_train: int, n_val: int):
+            train = entries[:n_train]
+            val = entries[n_train:n_train + n_val]
+            test = entries[n_train + n_val:]
+            return train, val, test
+
+        t_norm, v_norm, s_norm = cut(normal_entries, train_alloc["normal"], val_alloc["normal"])
+        t_intra, v_intra, s_intra = cut(intra_entries, train_alloc["intra"], val_alloc["intra"])
+        t_inter, v_inter, s_inter = cut(inter_entries, train_alloc["inter"], val_alloc["inter"])
+
+        # 6) Merge + global shuffle
+        self.train_data = t_norm + t_intra + t_inter
+        self.val_data   = v_norm + v_intra + v_inter
+        self.test_data  = s_norm + s_intra + s_inter
+
+        rng.shuffle(self.train_data)
+        rng.shuffle(self.val_data)
+        rng.shuffle(self.test_data)
+
+        self.train_data=self.train_data
+        
+        # 7) Boolean labels for evaluation
+        def labels_to_bool(list_of_entries: List[dict]) -> List[bool]:
+            out = []
+            for d in list_of_entries:
+                lab = d.get("label")
+                if isinstance(lab, str):
+                    out.append(lab.strip().lower() in ("true", "1", "t", "yes"))
+                elif isinstance(lab, (int, float)):
+                    out.append(int(lab) == 1)
+                elif isinstance(lab, bool):
+                    out.append(lab)
+                else:
+                    out.append(False)
+            return out
+
+        self.y_val = labels_to_bool(self.val_data)
+        self.y_test = labels_to_bool(self.test_data)
 
     def summary(self):
-        print(f"Train (normal only): {len(self.train_data)}")
-        vn = sum(not d["label"] for d in self.val_data)
-        va = sum(d["label"]     for d in self.val_data)
-        tn = sum(not d["label"] for d in self.test_data)
-        ta = sum(d["label"]     for d in self.test_data)
-        print(f"Validation: {len(self.val_data)} ({vn} normal, {va} anomalies)")
-        print(f"Test:       {len(self.test_data)} ({tn} normal, {ta} anomalies)")
-
-
+        def count_types(data):
+            n_norm = sum(d["anomaly_type"] == "normal" for d in data)
+            n_intra = sum(d["anomaly_type"] == "intra" for d in data)
+            n_inter = sum(d["anomaly_type"] == "inter" for d in data)
+            return n_norm, n_intra, n_inter
+        tn, ti, te = count_types(self.train_data)
+        vn, vi, ve = count_types(self.val_data)
+        sn, si, se = count_types(self.test_data)
+        print(f"Train: {len(self.train_data)} ({tn} normal, {ti} intra, {te} inter)")
+        print(f"Val:   {len(self.val_data)} ({vn} normal, {vi} intra, {ve} inter)")
+        print(f"Test:  {len(self.test_data)} ({sn} normal, {si} inter, {se} inter)")

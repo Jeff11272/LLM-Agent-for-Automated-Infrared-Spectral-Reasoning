@@ -1,0 +1,34 @@
+{
+  "datasets": [
+    {
+        "name": "tecator",
+        "aliases": ["tecator", "meat", "fat content"],
+        "seed": 5
+    },
+    {
+        "name": "corn",
+        "aliases": ["corn","corn protein content"],
+        "seed": 3
+    },
+    {
+        "name": "waste water",
+        "aliases": ["waste water","COD content"],
+        "seed": 7
+    },
+    {
+        "name": "citri reticulatae pericarpium",
+        "aliases": ["citri reticulatae pericarpium", "chenpi"],
+        "labels": ["1","2","3","4","5","6","7","8"],
+        "seed": 4
+    },
+    {
+        "name": "chinese medicine",
+        "aliases": ["chinese medicine", "chinese medical herb"],
+        "labels": ["山银花", "金银花", "山银花金银花混合物"]
+    },
+    {
+        "name": "milk",
+        "aliases": ["milk"],
+        "labels": ["1","2","3","4","5","6","7","8","9"]
+    }]
+}

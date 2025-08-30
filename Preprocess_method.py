@@ -1,9 +1,10 @@
+# spectral_preprocessing.py
+
 import numpy as np
 from scipy.signal import savgol_filter
 from scipy import sparse
 from scipy.sparse.linalg import spsolve
 import matplotlib.pyplot as plt
-
 
 def baseline_correction_asls(
     data: np.ndarray,
@@ -12,12 +13,12 @@ def baseline_correction_asls(
     niter: int = 10
 ) -> np.ndarray:
     """
-    对输入数据 (n_samples, n_pixels, n_bands) 中每个光谱（长度 = n_bands）逐一进行 AsLS 基线校正。
+    Apply AsLS baseline correction to each spectrum (length = n_bands) in input data (n_samples, n_pixels, n_bands).
     """
     n_samples, n_pixels, n_bands = data.shape
     corrected = np.zeros_like(data)
 
-    # 二阶差分矩阵 D
+    # Second-order difference matrix D
     L = n_bands
     D = sparse.diags([1, -2, 1], [0, 1, 2], shape=(L - 2, L))
 
@@ -34,7 +35,6 @@ def baseline_correction_asls(
 
     return corrected
 
-
 def savitzky_golay_smoothing(
     data: np.ndarray,
     window_length: int = 11,
@@ -43,10 +43,10 @@ def savitzky_golay_smoothing(
     delta: float = 1.0
 ) -> np.ndarray:
     """
-    对输入数据应用 Savitzky-Golay 滤波：平滑或求导。
+    Apply Savitzky-Golay filter to input data: smoothing or derivative.
     """
     if window_length % 2 == 0 or window_length <= polyorder:
-        raise ValueError("window_length 必须为奇数，且大于 polyorder。")
+        raise ValueError("window_length must be odd and greater than polyorder.")
 
     n_samples, n_pixels, _ = data.shape
     result = np.zeros_like(data)
@@ -64,10 +64,9 @@ def savitzky_golay_smoothing(
 
     return result
 
-
 def standard_normal_variate(data: np.ndarray) -> np.ndarray:
     """
-    对输入数据应用 SNV 变换: (spectrum - mean) / std。
+    Apply SNV transformation to input data: (spectrum - mean) / std.
     """
     n_samples, n_pixels, n_bands = data.shape
     snv = np.zeros_like(data)
@@ -84,10 +83,9 @@ def standard_normal_variate(data: np.ndarray) -> np.ndarray:
 
     return snv
 
-
 def multiplicative_scatter_correction(data: np.ndarray) -> np.ndarray:
     """
-    对输入数据进行 MSC 校正。
+    Apply MSC correction to input data.
     """
     n_samples, n_pixels, n_bands = data.shape
     corrected = np.zeros_like(data)
@@ -104,10 +102,9 @@ def multiplicative_scatter_correction(data: np.ndarray) -> np.ndarray:
 
     return corrected
 
-
 def normalization_min_max(data: np.ndarray) -> np.ndarray:
     """
-    Min-Max 归一化到 [0,1]。
+    Min-Max normalization to [0,1].
     """
     n_samples, n_pixels, n_bands = data.shape
     normed = np.zeros_like(data)
@@ -123,10 +120,9 @@ def normalization_min_max(data: np.ndarray) -> np.ndarray:
 
     return normed
 
-
 def detrend_spectrum(data: np.ndarray) -> np.ndarray:
     """
-    一阶多项式去趋势。
+    First-order polynomial detrending.
     """
     n_samples, n_pixels, n_bands = data.shape
     detrended = np.zeros_like(data)
@@ -141,7 +137,7 @@ def detrend_spectrum(data: np.ndarray) -> np.ndarray:
 
     return detrended
 
-# 新增复合预处理函数：
+# Composite preprocessing functions
 
 def snv_fd(
     data: np.ndarray,
@@ -150,10 +146,10 @@ def snv_fd(
     delta: float = 1.0
 ) -> np.ndarray:
     """
-    先做 SNV 变换，再对结果进行一阶导数 (Savitzky-Golay)。
+    Apply SNV transformation first, then first derivative (Savitzky-Golay).
     """
     snv_data = standard_normal_variate(data)
-    # 一阶导数
+    # First derivative
     return savitzky_golay_smoothing(
         snv_data,
         window_length=window_length,
@@ -162,7 +158,6 @@ def snv_fd(
         delta=delta
     )
 
-
 def sg_fd(
     data: np.ndarray,
     window_length: int = 11,
@@ -170,7 +165,7 @@ def sg_fd(
     delta: float = 1.0
 ) -> np.ndarray:
     """
-    Savitzky-Golay 一阶导数。
+    Savitzky-Golay first derivative.
     """
     return savitzky_golay_smoothing(
         data,
@@ -180,7 +175,6 @@ def sg_fd(
         delta=delta
     )
 
-
 def msc_fd(
     data: np.ndarray,
     window_length: int = 11,
@@ -188,7 +182,7 @@ def msc_fd(
     delta: float = 1.0
 ) -> np.ndarray:
     """
-    先做 MSC 校正，再对结果进行一阶导数 (Savitzky-Golay)。
+    Apply MSC correction first, then first derivative (Savitzky-Golay).
     """
     msc_data = multiplicative_scatter_correction(data)
     return savitzky_golay_smoothing(
@@ -199,10 +193,9 @@ def msc_fd(
         delta=delta
     )
 
-
 def plot_average_spectra(data: np.ndarray, labels: np.ndarray, title: str):
     """
-    绘制各类别平均光谱曲线。
+    Plot average spectra for each class.
     """
     classes = np.unique(labels)
     n_bands = data.shape[2]
@@ -218,6 +211,3 @@ def plot_average_spectra(data: np.ndarray, labels: np.ndarray, title: str):
     plt.xlabel("Band Index")
     plt.ylabel("Average Intensity")
     plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
